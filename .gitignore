@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets — see .env.example
+.env
+
+# Obsidian local state (community-plugins.json IS committed on purpose,
+# see vault/.obsidian/ — only per-device state is ignored)
+vault/.obsidian/workspace.json
+vault/.obsidian/workspace-mobile.json
+vault/.obsidian/plugins/
+
+# OS cruft
+.DS_Store

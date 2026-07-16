@@ -9,6 +9,19 @@ health/gym) — coached over Telegram, browsed in Obsidian.
 Replaces `oslife` (which stays running in parallel until this covers what it
 needs to and gets cut over deliberately, not on a deadline).
 
+## Quick start (Phase 0 — built)
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python3 tools/lint.py --path vault      # should print "lint passed — 10 note(s) OK."
+git config core.hooksPath hooks         # enable the pre-commit lint gate
+```
+
+Then open `vault/` directly in Obsidian (see `vault/README.md` for the
+one-time Dataview setup) and start replacing the notes tagged `example`
+with your own.
+
 ## Start here
 
 1. [`docs/00-PLAN.md`](docs/00-PLAN.md) — how this repo's docs relate to each
@@ -32,6 +45,14 @@ needs to and gets cut over deliberately, not on a deadline).
 
 ## Status
 
-Planning complete. Phase 0 (foundation: vault, templates, linter, no AI, no
-phone) has not been started yet. No NAS purchased yet — see `00-PLAN.md` for
-why that's fine and what runs where in the interim.
+- **Phase 0 (foundation) — done.** Vault tree, 18 note-type templates,
+  taxonomy/config/lint-rules, `tools/lint.py` (+ pre-commit hook + CI),
+  four Dataview dashboards, nightly auto-commit script. No AI, no phone,
+  no NAS needed — and none purchased yet (see `docs/00-PLAN.md` for why
+  that's fine and what runs where in the interim).
+- **Phase 1 (capture + normalize)** — not started. Needs: a fresh
+  Supabase project (see `docs/00-PLAN.md`), a Telegram bot token, an
+  Anthropic API key.
+- **Phase 2 (seed the self)** — blocked on you filling in
+  `docs/04-self-model-interview.md`, at your own pace, whenever.
+- Phases 3-9: see `docs/03-engineering-build-spec.md` §11.

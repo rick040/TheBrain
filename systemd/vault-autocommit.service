@@ -1,0 +1,7 @@
+[Unit]
+Description=Snapshot-commit the TheBrain vault
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/TheBrain
+ExecStart=%h/TheBrain/scripts/vault-autocommit.sh

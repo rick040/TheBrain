@@ -1,0 +1,35 @@
+# TheBrain vault config.
+#
+# Phase 0 status: this file documents the target shape from
+# docs/02-data-structure-and-flow.md §11. The `llm` and `coach` sections
+# are not wired to anything yet — Phase 1 introduces `llm.py`, Phase 5
+# introduces the coach. Nothing in Phase 0 reads this file except
+# `tools/lint.py`, which only checks that note frontmatter is consistent
+# with it (the `locale` block, mainly).
+
+llm:
+  default:  {provider: anthropic, model: claude-haiku-4-5-20251001}   # verify at docs.claude.com at build time
+  strong:   {provider: anthropic, model: claude-sonnet-5}
+  escalate: {provider: anthropic, model: claude-opus-4-8}             # on-demand only, not routine
+  route_strong_for: [evaluator_deep_report, gap_review_synthesis, metabolism_self_model_pass]
+
+coach:
+  channel: telegram
+  morning_brief: "07:30"
+  escalation: on
+  quiet_windows: []          # populated from self/current/energy-mood once Phase 2 seeds it
+
+thresholds:
+  stale_lead_days: 7
+  unbilled_hours_alert: 10
+
+locale:
+  country: NL
+  currency: EUR
+  vat_rate: 21
+
+storage:
+  # See docs/00-PLAN.md for the reasoning: Postgres+pgvector via Supabase
+  # now, self-hosted on the NAS later. Nothing here yet in Phase 0 — this
+  # section gets real values in Phase 1 when the Supabase project exists.
+  telemetry: null   # e.g. a Supabase project ref, once created

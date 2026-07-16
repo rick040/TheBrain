@@ -1,0 +1,5 @@
+# Phase 0 (foundation) needs only this.
+# Later phases add: watchdog, pytesseract, faster-whisper, trafilatura,
+# python-telegram-bot, supabase, anthropic, pydantic — added when those
+# phases start, not up front (docs/03-engineering-build-spec.md §13).
+pyyaml>=6.0
