@@ -1,0 +1,9 @@
+[Unit]
+Description=TheBrain live nudges, every 2 hours during waking hours
+
+[Timer]
+OnCalendar=*-*-* 8,10,12,14,16,18,20:00:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

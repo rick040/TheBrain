@@ -1,0 +1,9 @@
+[Unit]
+Description=TheBrain morning brief, daily 07:30
+
+[Timer]
+OnCalendar=*-*-* 07:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

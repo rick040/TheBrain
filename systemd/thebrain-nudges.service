@@ -1,0 +1,7 @@
+[Unit]
+Description=TheBrain live nudges (threshold check)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/TheBrain
+ExecStart=%h/TheBrain/.venv/bin/python3 -m app.brain.coach --path vault --nudges

@@ -25,7 +25,8 @@ coach:
   channel: telegram
   morning_brief: "07:30"
   escalation: on
-  quiet_windows: []          # populated from self/current/energy-mood once Phase 2 seeds it
+  intensity: 2               # 1 (gentle) - 3 (firm); tune to taste, see docs/03-engineering-build-spec.md §8.6
+  quiet_windows: []          # e.g. [["22:00","07:00"]] — populated from self/current/energy-mood once Phase 2 seeds it
 
 thresholds:
   stale_lead_days: 7
