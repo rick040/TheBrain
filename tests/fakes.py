@@ -26,6 +26,10 @@ class _FakeQuery:
         self._filters.append(("contains", key, value))
         return self
 
+    def gte(self, key, value):
+        self._filters.append(("gte", key, value))
+        return self
+
     def execute(self):
         rows = self._rows
         for kind, key, value in self._filters:
@@ -33,6 +37,8 @@ class _FakeQuery:
                 rows = [r for r in rows if r.get(key) == value]
             elif kind == "contains":
                 rows = [r for r in rows if (r.get(key) or {}).items() >= value.items()]
+            elif kind == "gte":
+                rows = [r for r in rows if (r.get(key) or "") >= value]
         return _FakeResult(rows)
 
 

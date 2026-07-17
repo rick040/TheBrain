@@ -5,6 +5,7 @@ Commands:
     /track <project-slug> <hours> <desc>   -> events(kind=time_entry), replies with budget status
     /done <habit>                          -> events(kind=habit_tick)  (streak logic is Phase 4's gap engine, not this)
     /lift <exercise> <scheme> <load>       -> events(kind=lift)
+    /next <exercise>                       -> suggested next load (progressive overload / sleep-based deload, Phase 7)
     /ask <question>                        -> RAG over embeddings, answered with llm()
     /invoice <project-slug> <YYYY-MM>      -> drafts an NL-compliant invoice note + PDF, sends the PDF back to you
     /review                                -> lists pending proposals (from the gap engine, Phase 4) with Confirm/Reject buttons
@@ -49,6 +50,7 @@ from app.common.db import DB
 from app.crm import billing
 from app.crm.invoice_pdf import render_invoice_pdf
 from app.evaluator import idea_intake
+from app.health import training
 from app.llm import get_embedding, llm
 from app.normalizer import process_drop
 
@@ -63,6 +65,7 @@ HELP_TEXT = (
     "/idea <description> - fast verdict on a business idea\n"
     "/done <habit> - tick a habit\n"
     "/lift <exercise> <scheme> <load> - log a set\n"
+    "/next <exercise> - suggested load for next session\n"
     "/ask <question> - ask the vault (RAG)\n"
 )
 
@@ -268,6 +271,18 @@ async def lift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f"Logged {exercise} {scheme} @ {load}.")
 
 
+async def next_lift(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.args:
+        await update.message.reply_text("usage: /next <exercise>")
+        return
+    exercise = context.args[0]
+    result = training.suggest_next_load(_get_db(context), exercise)
+    if result["suggestion"] is None:
+        await update.message.reply_text(f"{exercise}: {result['reason']}")
+    else:
+        await update.message.reply_text(f"{exercise}: try {result['suggestion']}kg — {result['reason']}")
+
+
 async def ask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
         await update.message.reply_text("usage: /ask <question>")
@@ -307,6 +322,7 @@ def build_app() -> Application:
     application.add_handler(CommandHandler("idea", idea))
     application.add_handler(CommandHandler("done", done))
     application.add_handler(CommandHandler("lift", lift))
+    application.add_handler(CommandHandler("next", next_lift))
     application.add_handler(CommandHandler("ask", ask))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, capture_text))
     application.add_handler(MessageHandler(filters.PHOTO, capture_photo))
