@@ -7,25 +7,41 @@ Commands:
     /lift <exercise> <scheme> <load>       -> events(kind=lift)
     /ask <question>                        -> RAG over embeddings, answered with llm()
     /invoice <project-slug> <YYYY-MM>      -> drafts an NL-compliant invoice note + PDF, sends the PDF back to you
+    /review                                -> lists pending proposals (from the gap engine, Phase 4) with Confirm/Reject buttons
 
 Run with: python3 -m app.bot.telegram_bot
 Needs TELEGRAM_BOT_TOKEN in .env, plus BUSINESS_* fields for /invoice
 (see .env.example). Time is tracked per PROJECT, not client, because
 budget_hours/rate live on the project note (app/crm/billing.py).
 
-/invoice is the "propose -> confirm" step for money
-(docs/03-engineering-build-spec.md §6.5, §10): it drafts the invoice note
-+ PDF and sends the PDF to you in this chat for approval. It never emails
-or sends it anywhere else — that stays a manual step, on purpose.
+/invoice and /review are the "propose -> confirm" step required by
+docs/03-engineering-build-spec.md §12 ("the brain never silently edits
+your identity model or generates an invoice without you approving it"):
+/invoice drafts a PDF and sends it here for approval (never auto-sent
+elsewhere); /review is how OKR/habit/experiment proposals the gap engine
+writes (tagged `proposed`) get confirmed or rejected — see app/bot/confirm.py.
+
+/start records this chat as the one to push proactive messages to (the
+morning brief, live nudges — Phase 5) via TELEGRAM_CHAT_ID; the bot has
+no other way to know who to message first.
 """
 from __future__ import annotations
 
 import logging
+import uuid
 from pathlib import Path
 
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
+from app.bot import confirm
 from app.common import frontmatter
 from app.common.config import get_env
 from app.common.db import DB
@@ -41,6 +57,7 @@ HELP_TEXT = (
     "Drop text, a photo, or a voice note and I'll file it.\n\n"
     "/track <project-slug> <hours> <desc> - log billable time\n"
     "/invoice <project-slug> <YYYY-MM> - draft an invoice for that month\n"
+    "/review - confirm or reject pending proposals\n"
     "/done <habit> - tick a habit\n"
     "/lift <exercise> <scheme> <load> - log a set\n"
     "/ask <question> - ask the vault (RAG)\n"
@@ -52,7 +69,51 @@ def _get_db(context: ContextTypes.DEFAULT_TYPE) -> DB:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(HELP_TEXT)
+    chat_id = update.effective_chat.id
+    await update.message.reply_text(
+        f"{HELP_TEXT}\nYour chat id is {chat_id} — set TELEGRAM_CHAT_ID={chat_id} "
+        f"in .env so the coach (Phase 5) knows where to push the morning "
+        f"brief and nudges. Nothing pushes proactively until you do."
+    )
+
+
+async def review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    pending = confirm.list_pending(VAULT_PATH)
+    if not pending:
+        await update.message.reply_text("Nothing pending review.")
+        return
+
+    id_map = context.bot_data.setdefault("pending_map", {})
+    for path in pending:
+        short_id = uuid.uuid4().hex[:10]
+        id_map[short_id] = path
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("Confirm", callback_data=f"c:{short_id}"),
+                    InlineKeyboardButton("Reject", callback_data=f"r:{short_id}"),
+                ]
+            ]
+        )
+        await update.message.reply_text(confirm.describe(path), reply_markup=keyboard)
+
+
+async def on_review_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    action, short_id = query.data.split(":", 1)
+    path = context.bot_data.get("pending_map", {}).get(short_id)
+    if path is None or not path.is_file():
+        await query.edit_message_text("That proposal is gone (already handled, or vault changed).")
+        return
+
+    if action == "c":
+        confirm.confirm(path)
+        await query.edit_message_text(f"Confirmed: {confirm.describe(path)}")
+    else:
+        confirm.reject(path)
+        await query.edit_message_text(f"Rejected: {confirm.describe(path)}")
+    context.bot_data["pending_map"].pop(short_id, None)
 
 
 async def capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -214,6 +275,8 @@ def build_app() -> Application:
     application.add_handler(CommandHandler("help", start))
     application.add_handler(CommandHandler("track", track))
     application.add_handler(CommandHandler("invoice", invoice))
+    application.add_handler(CommandHandler("review", review))
+    application.add_handler(CallbackQueryHandler(on_review_button, pattern=r"^[cr]:"))
     application.add_handler(CommandHandler("done", done))
     application.add_handler(CommandHandler("lift", lift))
     application.add_handler(CommandHandler("ask", ask))
