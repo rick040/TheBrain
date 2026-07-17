@@ -41,6 +41,7 @@ systemctl --user status thebrain-bot.service
 | `thebrain-metabolism` | 03:30 daily | `app.brain.metabolism` — freshness flags + tag-merge proposals |
 | `thebrain-gap-review` | Sunday 18:00 | `app.brain.gap_review` — needs Phase 2's self-model to produce anything meaningful; harmless no-op until then |
 | `thebrain-weekly-review` | Sunday 19:00 | `app.brain.coach --weekly-review` — drafts the past 7 days' review note (hours, habit ticks, open deliverables + an llm()-drafted wins/misses reflection) |
+| `thebrain-snapshot` | every 4h | `app.brain.snapshot` — writes Postgres-backed billing/health status into `_dashboards/*-snapshot.md` so Dataview (vault-only) can show it (Phase 9) |
 
 Install any of them the same way:
 
@@ -69,6 +70,7 @@ crontab -e
 30 3  * * *        cd $HOME/TheBrain && .venv/bin/python3 -m app.brain.metabolism >> /tmp/thebrain.log 2>&1
 0  18 * * 0        cd $HOME/TheBrain && .venv/bin/python3 -m app.brain.gap_review >> /tmp/thebrain.log 2>&1
 0  19 * * 0        cd $HOME/TheBrain && .venv/bin/python3 -m app.brain.coach --weekly-review >> /tmp/thebrain.log 2>&1
+0  0,4,8,12,16,20 * * *  cd $HOME/TheBrain && .venv/bin/python3 -m app.brain.snapshot >> /tmp/thebrain.log 2>&1
 ```
 
 The bot itself (`app.bot.telegram_bot`) still needs *something* to keep
