@@ -194,6 +194,30 @@ def is_quiet_hours(config: dict, now: datetime.datetime | None = None) -> bool:
     return False
 
 
+def _decisions_due_nudges(vault_path: Path) -> list[str]:
+    from app.brain import decisions
+
+    due = decisions.due_for_review(vault_path)
+    if not due:
+        return []
+    return [f"{len(due)} decision(s) due for review: {', '.join(p.stem for p in due)}"]
+
+
+def _resurfacing_nudges(vault_path: Path) -> list[str]:
+    from app.brain import resurfacing
+
+    items = resurfacing.resurface_candidates(vault_path)
+    return [f"Resurfacing: [[{p.stem}]] — untouched a while, still relevant?" for p in items]
+
+
+def _balance_nudge(vault_path: Path, db) -> list[str]:
+    from app.brain import balance
+
+    counts = balance.area_activity_counts(db)
+    warning = balance.flag_imbalance(counts)
+    return [warning] if warning else []
+
+
 def collect_nudges(vault_path: Path, db, config: dict | None = None) -> list[str]:
     config = config if config is not None else load_vault_config(vault_path / "_system" / "config.yaml")
     if not config.get("coach", {}).get("escalation", True):
@@ -204,6 +228,9 @@ def collect_nudges(vault_path: Path, db, config: dict | None = None) -> list[str
     nudges += _stale_leads(vault_path, config)
     nudges += _unbilled_hours(vault_path, db, config)
     nudges += _missed_habits(vault_path, db)
+    nudges += _decisions_due_nudges(vault_path)
+    nudges += _resurfacing_nudges(vault_path)
+    nudges += _balance_nudge(vault_path, db)
     return nudges
 
 
@@ -229,6 +256,7 @@ def main() -> int:
     parser.add_argument("--path", default="vault")
     parser.add_argument("--morning-brief", action="store_true")
     parser.add_argument("--nudges", action="store_true")
+    parser.add_argument("--weekly-review", action="store_true", help="Phase 8: draft the past 7 days' review note")
     parser.add_argument("--dry-run", action="store_true", help="print instead of sending to Telegram")
     args = parser.parse_args()
 
@@ -242,6 +270,18 @@ def main() -> int:
         db = DB()
         for nudge in collect_nudges(vault_path, db):
             print(nudge) if args.dry_run else send_telegram_message(_frame(nudge))
+    if args.weekly_review:
+        from app.brain import reviews
+        from app.common.db import DB
+
+        db = DB()
+        end = datetime.date.today()
+        start = end - datetime.timedelta(days=7)
+        if args.dry_run:
+            print(reviews.compose_review(vault_path, db, start, end))
+        else:
+            path = reviews.write_review(vault_path, db, start, end)
+            send_telegram_message(f"Weekly review drafted: {path.relative_to(vault_path)}")
     return 0
 
 
