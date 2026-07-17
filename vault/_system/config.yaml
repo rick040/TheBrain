@@ -1,17 +1,25 @@
 # TheBrain vault config.
 #
-# Phase 0 status: this file documents the target shape from
-# docs/02-data-structure-and-flow.md §11. The `llm` and `coach` sections
-# are not wired to anything yet — Phase 1 introduces `llm.py`, Phase 5
-# introduces the coach. Nothing in Phase 0 reads this file except
-# `tools/lint.py`, which only checks that note frontmatter is consistent
-# with it (the `locale` block, mainly).
+# Phase 0 status note is stale as of Phase 1: `llm.py`, `app/common/db.py`,
+# the watcher/normalizer/embedder, and the Telegram bot skeleton now read
+# this file for real. Nothing in it is a secret — those live in a local
+# .env (see .env.example) and are never committed.
 
 llm:
   default:  {provider: anthropic, model: claude-haiku-4-5-20251001}   # verify at docs.claude.com at build time
   strong:   {provider: anthropic, model: claude-sonnet-5}
   escalate: {provider: anthropic, model: claude-opus-4-8}             # on-demand only, not routine
   route_strong_for: [evaluator_deep_report, gap_review_synthesis, metabolism_self_model_pass]
+
+embeddings:
+  # "mock" is a deterministic, non-semantic placeholder (app/llm.py) —
+  # fine for Phase 1's plumbing (routing, storage, /ask wiring) but not
+  # real semantic search. Switch to "ollama" once a worker host exists to
+  # run it (docs/00-PLAN.md) — no caller changes needed, same as llm().
+  provider: mock
+  model: nomic-embed-text
+  dim: 768
+  ollama_host: http://localhost:11434
 
 coach:
   channel: telegram

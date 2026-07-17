@@ -1,0 +1,11 @@
+# Optional — only needed once you actually drop a screenshot, voice
+# note, or scanned PDF into the inbox (app/normalizer.py lazy-imports
+# these). Install with: pip install -r requirements-media.txt
+#
+# pytesseract also needs the `tesseract-ocr` system package
+# (apt install tesseract-ocr / brew install tesseract).
+# faster-whisper downloads a model on first use (~150MB for "base").
+pytesseract>=0.3.10
+pillow>=10.0
+faster-whisper>=1.0
+pypdf>=4.0

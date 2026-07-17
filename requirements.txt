@@ -1,5 +1,10 @@
-# Phase 0 (foundation) needs only this.
-# Later phases add: watchdog, pytesseract, faster-whisper, trafilatura,
-# python-telegram-bot, supabase, anthropic, pydantic — added when those
-# phases start, not up front (docs/03-engineering-build-spec.md §13).
+# Core — Phase 0 + Phase 1's text/URL capture path, the Telegram bot,
+# and Supabase. Enough to run everything except OCR/voice-note/PDF
+# extraction, which lazy-import requirements-media.txt on first use.
 pyyaml>=6.0
+anthropic>=0.40
+supabase>=2.9
+watchdog>=4.0
+trafilatura>=1.12
+requests>=2.32
+python-telegram-bot>=21.0
