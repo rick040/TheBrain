@@ -1,6 +1,7 @@
 # Core — Phase 0/1's text/URL capture path, the Telegram bot, Supabase,
-# and Phase 3's CRM/invoicing. Enough to run everything except OCR/
-# voice-note/PDF-extraction, which lazy-import requirements-media.txt.
+# Phase 3's CRM/invoicing, and Phase 6's evaluator MCP server. Enough to
+# run everything except OCR/voice-note/PDF-extraction, which
+# lazy-import requirements-media.txt.
 pyyaml>=6.0
 anthropic>=0.40
 supabase>=2.9
@@ -9,3 +10,4 @@ trafilatura>=1.12
 requests>=2.32
 python-telegram-bot>=21.0
 fpdf2>=2.7
+mcp>=1.0

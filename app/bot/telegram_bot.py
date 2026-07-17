@@ -8,6 +8,7 @@ Commands:
     /ask <question>                        -> RAG over embeddings, answered with llm()
     /invoice <project-slug> <YYYY-MM>      -> drafts an NL-compliant invoice note + PDF, sends the PDF back to you
     /review                                -> lists pending proposals (from the gap engine, Phase 4) with Confirm/Reject buttons
+    /idea <description>                    -> fast verdict (Phase 6 stage 1+2); deep report is the biz-eval Skill, not this bot
 
 Run with: python3 -m app.bot.telegram_bot
 Needs TELEGRAM_BOT_TOKEN in .env, plus BUSINESS_* fields for /invoice
@@ -47,6 +48,7 @@ from app.common.config import get_env
 from app.common.db import DB
 from app.crm import billing
 from app.crm.invoice_pdf import render_invoice_pdf
+from app.evaluator import idea_intake
 from app.llm import get_embedding, llm
 from app.normalizer import process_drop
 
@@ -58,6 +60,7 @@ HELP_TEXT = (
     "/track <project-slug> <hours> <desc> - log billable time\n"
     "/invoice <project-slug> <YYYY-MM> - draft an invoice for that month\n"
     "/review - confirm or reject pending proposals\n"
+    "/idea <description> - fast verdict on a business idea\n"
     "/done <habit> - tick a habit\n"
     "/lift <exercise> <scheme> <load> - log a set\n"
     "/ask <question> - ask the vault (RAG)\n"
@@ -221,6 +224,30 @@ async def invoice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
+async def idea(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.args:
+        await update.message.reply_text("usage: /idea <description>")
+        return
+    idea_text = " ".join(context.args)
+    verdict = idea_intake.fast_verdict(VAULT_PATH, idea_text)
+
+    slug = frontmatter.new_id()  # timestamp-based slug keeps ideas with similar titles distinct
+    fm, _ = frontmatter.new_note_from_template(
+        VAULT_PATH,
+        "idea",
+        overrides={
+            "verdict": verdict["verdict"],
+            "idea_score": verdict["idea_score"],
+            "fit_score": verdict["fit_score"],
+            "report_status": "none",
+        },
+    )
+    path = VAULT_PATH / "ideas" / f"idea--{slug}.md"
+    frontmatter.write_note(path, fm, idea_text)
+
+    await update.message.reply_text(idea_intake.format_verdict_card(verdict))
+
+
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
         await update.message.reply_text("usage: /done <habit>")
@@ -277,6 +304,7 @@ def build_app() -> Application:
     application.add_handler(CommandHandler("invoice", invoice))
     application.add_handler(CommandHandler("review", review))
     application.add_handler(CallbackQueryHandler(on_review_button, pattern=r"^[cr]:"))
+    application.add_handler(CommandHandler("idea", idea))
     application.add_handler(CommandHandler("done", done))
     application.add_handler(CommandHandler("lift", lift))
     application.add_handler(CommandHandler("ask", ask))
