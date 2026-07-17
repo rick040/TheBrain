@@ -15,6 +15,8 @@ stage: proposal
 rate: 85
 contacts: [jan@example.co]
 projects: ["[[project--example-co-website]]"]
+country: NL
+vat_id:
 ---
 
 Delete me — this is a seed note so the Dataview boards in `_dashboards/`

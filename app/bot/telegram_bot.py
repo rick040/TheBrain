@@ -1,31 +1,36 @@
-"""Telegram bot skeleton (docs/03-engineering-build-spec.md §6.5).
+"""Telegram bot (docs/03-engineering-build-spec.md §6.5, §10).
 
 Commands:
     (plain text/photo/voice) -> saved to inbox/, normalized immediately, replies with what it became
-    /track <client> <hours> <desc>   -> events(kind=time_entry)
-    /done <habit>                    -> events(kind=habit_tick)  (streak logic is Phase 4's gap engine, not this)
-    /lift <exercise> <scheme> <load> -> events(kind=lift)
-    /ask <question>                  -> RAG over embeddings, answered with llm()
+    /track <project-slug> <hours> <desc>   -> events(kind=time_entry), replies with budget status
+    /done <habit>                          -> events(kind=habit_tick)  (streak logic is Phase 4's gap engine, not this)
+    /lift <exercise> <scheme> <load>       -> events(kind=lift)
+    /ask <question>                        -> RAG over embeddings, answered with llm()
+    /invoice <project-slug> <YYYY-MM>      -> drafts an NL-compliant invoice note + PDF, sends the PDF back to you
 
 Run with: python3 -m app.bot.telegram_bot
-Needs TELEGRAM_BOT_TOKEN in .env. All money/self-model writes elsewhere in
-the system go through a propose->confirm step (docs/03-engineering-build-spec.md
-§6.5, §8.3) — this Phase 1 skeleton only has plain logging commands, so
-there's nothing to confirm yet; that pattern lands with the gap engine
-(Phase 4) and CRM invoicing (Phase 3).
+Needs TELEGRAM_BOT_TOKEN in .env, plus BUSINESS_* fields for /invoice
+(see .env.example). Time is tracked per PROJECT, not client, because
+budget_hours/rate live on the project note (app/crm/billing.py).
+
+/invoice is the "propose -> confirm" step for money
+(docs/03-engineering-build-spec.md §6.5, §10): it drafts the invoice note
++ PDF and sends the PDF to you in this chat for approval. It never emails
+or sends it anywhere else — that stays a manual step, on purpose.
 """
 from __future__ import annotations
 
 import logging
-import shutil
-import tempfile
 from pathlib import Path
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
+from app.common import frontmatter
 from app.common.config import get_env
 from app.common.db import DB
+from app.crm import billing
+from app.crm.invoice_pdf import render_invoice_pdf
 from app.llm import get_embedding, llm
 from app.normalizer import process_drop
 
@@ -34,7 +39,8 @@ logger = logging.getLogger(__name__)
 VAULT_PATH = Path("vault")
 HELP_TEXT = (
     "Drop text, a photo, or a voice note and I'll file it.\n\n"
-    "/track <client> <hours> <desc> - log billable time\n"
+    "/track <project-slug> <hours> <desc> - log billable time\n"
+    "/invoice <project-slug> <YYYY-MM> - draft an invoice for that month\n"
     "/done <habit> - tick a habit\n"
     "/lift <exercise> <scheme> <load> - log a set\n"
     "/ask <question> - ask the vault (RAG)\n"
@@ -87,18 +93,71 @@ async def _process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE,
 async def track(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     if len(args) < 3:
-        await update.message.reply_text("usage: /track <client> <hours> <description...>")
+        await update.message.reply_text("usage: /track <project-slug> <hours> <description...>")
         return
-    client, hours, *desc_words = args
+    project_slug, hours, *desc_words = args
     try:
         hours_val = float(hours)
     except ValueError:
         await update.message.reply_text(f"'{hours}' isn't a number of hours")
         return
-    _get_db(context).insert_event(
-        "time_entry", value=hours_val, meta={"client": client, "desc": " ".join(desc_words)}, source="coach"
+
+    db = _get_db(context)
+    db.insert_event(
+        "time_entry", value=hours_val, meta={"project": project_slug, "desc": " ".join(desc_words)}, source="coach"
     )
-    await update.message.reply_text(f"Logged {hours_val}h on {client}.")
+    try:
+        status = billing.budget_status(VAULT_PATH, db, project_slug)
+        await update.message.reply_text(
+            f"Logged {hours_val}h on {project_slug}. "
+            f"{status['logged_hours']:.1f}h / {status['budget_hours']:.1f}h budget "
+            f"({status['remaining_hours']:.1f}h remaining)."
+        )
+    except FileNotFoundError:
+        await update.message.reply_text(
+            f"Logged {hours_val}h on {project_slug} (no project note found at "
+            f"crm/projects/project--{project_slug}.md, so no budget to compare against)."
+        )
+
+
+async def invoice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    args = context.args
+    if len(args) != 2 or "-" not in args[1]:
+        await update.message.reply_text("usage: /invoice <project-slug> <YYYY-MM>")
+        return
+    project_slug, period = args
+    try:
+        year_str, month_str = period.split("-")
+        year, month = int(year_str), int(month_str)
+    except ValueError:
+        await update.message.reply_text(f"'{period}' isn't YYYY-MM")
+        return
+
+    db = _get_db(context)
+    try:
+        invoice_data = billing.compute_invoice(VAULT_PATH, db, project_slug, year, month)
+    except FileNotFoundError as exc:
+        await update.message.reply_text(str(exc))
+        return
+
+    invoice_path = VAULT_PATH / "crm" / "invoices" / f"invoice--{invoice_data['number']}.md"
+    fm, _ = frontmatter.new_note_from_template(
+        VAULT_PATH, "invoice", overrides={"visibility": "sensitive", **invoice_data}
+    )
+    frontmatter.write_note(invoice_path, fm)
+
+    pdf_path = VAULT_PATH / "crm" / "invoices" / f"invoice--{invoice_data['number']}.pdf"
+    render_invoice_pdf(invoice_data, pdf_path)
+
+    await update.message.reply_document(
+        document=open(pdf_path, "rb"),
+        filename=pdf_path.name,
+        caption=(
+            f"Draft invoice {invoice_data['number']} for {project_slug}, {period}: "
+            f"{invoice_data['hours']:.1f}h -> EUR {invoice_data['total']:.2f}. "
+            f"Review before sending it anywhere — nothing here emails or sends it for you."
+        ),
+    )
 
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -154,6 +213,7 @@ def build_app() -> Application:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", start))
     application.add_handler(CommandHandler("track", track))
+    application.add_handler(CommandHandler("invoice", invoice))
     application.add_handler(CommandHandler("done", done))
     application.add_handler(CommandHandler("lift", lift))
     application.add_handler(CommandHandler("ask", ask))

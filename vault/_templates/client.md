@@ -15,4 +15,6 @@ stage: lead
 rate:
 contacts: []
 projects: []
+country: NL
+vat_id:
 ---

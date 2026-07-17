@@ -38,6 +38,14 @@ except where an enum is checked, see below). Full list is in
 `tools/lint.py`'s `TYPE_SPEC`; mirrors `docs/02-data-structure-and-flow.md`
 §5.
 
+## Extensions beyond the original catalog (Phase 3)
+
+`client` notes now also carry `country` (default `NL`) and `vat_id`
+(blank unless the client is an EU business outside NL) — added for
+`app/crm/billing.py`'s reverse-charge detection. Optional, not
+lint-enforced, so pre-existing client notes without them still pass;
+new ones get them from `_templates/client.md`.
+
 ## Enum fields checked beyond the universal contract
 
 - `trait.polarity` → `strength | tension | neutral` (never good/bad — see build plan Part B2)

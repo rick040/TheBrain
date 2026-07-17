@@ -14,9 +14,9 @@ needs to and gets cut over deliberately, not on a deadline).
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-cp .env.example .env               # fill in the Phase 1 secrets — see below
+cp .env.example .env               # fill in the secrets — see below
 python3 tools/lint.py --path vault  # "lint passed — 10 note(s) OK."
-python3 -m pytest -q                # 24 passed, all offline (mock llm/embeddings)
+python3 -m pytest -q                # 34 passed, all offline (mock llm/embeddings, fake DB)
 git config core.hooksPath hooks     # enable the pre-commit lint gate
 ```
 
@@ -29,12 +29,14 @@ To run the capture pipeline for real:
 ```bash
 python3 -m app.watcher --path vault --once   # process anything already in vault/inbox/
 python3 -m app.watcher --path vault          # or stay running (Syncthing's target on your phone/NAS)
-python3 -m app.bot.telegram_bot              # the Telegram bot (capture, /track, /done, /lift, /ask)
+python3 -m app.bot.telegram_bot              # the Telegram bot (capture, /track, /invoice, /done, /lift, /ask)
 ```
 
 Needs `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-`THEBRAIN_USER_ID`, and `TELEGRAM_BOT_TOKEN` in `.env` — see
-`.env.example`. Never commit `.env`; it's gitignored.
+`THEBRAIN_USER_ID`, and `TELEGRAM_BOT_TOKEN` in `.env` for capture; add
+`BUSINESS_NAME`, `BUSINESS_ADDRESS`, `BUSINESS_KVK_NUMBER`,
+`BUSINESS_BTW_ID`, `BUSINESS_IBAN` for `/invoice` — see `.env.example`.
+Never commit `.env`; it's gitignored.
 
 ## Start here
 
@@ -80,9 +82,31 @@ Needs `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
   `THEBRAIN_USER_ID` in `.env.example` are still yours to fill in (grab
   the key from the Supabase dashboard; generate the UUID once and keep
   it forever).
-- **Phase 2 (seed the self)** — blocked on you filling in
-  `docs/04-self-model-interview.md`, at your own pace, whenever.
-- Phases 3-9: see `docs/03-engineering-build-spec.md` §11.
+- **Phase 2 (seed the self) — parked, on purpose.** Not blocking; nothing
+  after it in this list needed it, since CRM/billing don't read the
+  self-model (only the Phase 4 gap engine does). Pick it up whenever.
+- **Phase 3 (CRM / freelance ops) — partially done**, reordered ahead of
+  Phase 2 to unblock testing the capture layer. Built: `app/crm/billing.py`
+  (project-level time rollup + `budget_status`, period-based invoice
+  computation, a persistent per-year counter for NL's sequential-no-gaps
+  invoice numbering, EU reverse-charge auto-detection from a client's
+  `country`/`vat_id`), `app/crm/invoice_pdf.py` (renders the compliant
+  PDF — KVK/BTW-id, line items, VAT or reverse-charge line, IBAN), and
+  two new/changed bot commands: **`/track` now takes a project slug, not
+  a client name** (budget_hours/rate live on the project note), and
+  `/invoice <project-slug> <YYYY-MM>` drafts the note + PDF and sends the
+  PDF back to you in chat — nothing auto-sends anywhere else, that
+  approval step is the point. 10 new tests (billing math, VAT/reverse-charge,
+  invoice numbering, and one full compute→write→lint integration test).
+  **Deferred, not done**: the Gmail comms-log (needs a Google Cloud OAuth
+  app + a browser consent flow this session can't do) and per-project file
+  auto-filing (needs your own Syncthing setup). **Still yours to do**:
+  the example client/project notes haven't been swapped for real ones yet
+  — give me real client/project details (or edit them yourself in
+  Obsidian) whenever; and `BUSINESS_KVK_NUMBER`/`BUSINESS_BTW_ID`/
+  `BUSINESS_IBAN`/`BUSINESS_NAME`/`BUSINESS_ADDRESS` in `.env` are needed
+  before `/invoice` produces a real invoice rather than placeholder text.
+- Phases 4-9: see `docs/03-engineering-build-spec.md` §11.
 
 ## Security note
 
